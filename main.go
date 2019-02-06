@@ -62,15 +62,15 @@ func main() {
 		} else if len(govendorPkgs) > 0 {
 			diffRevs++
 			colorstring.Printf("[bold]%s[reset]\n - go modules: %s\n", mv.Path, mv.Version)
-			fmt.Print(" - govendor: [ ")
+			fmt.Print(" - govendor: [\n")
 			for _, gvp := range govendorPkgs {
 				if goModRev != "" && strings.HasPrefix(gvp.Revision, goModRev) {
-					colorstring.Printf("[green]%s ", gvp.Revision)
+					colorstring.Printf("       [green]%s (%s)\n", gvp.Revision, gvp.RevisionTime)
 				} else {
-					fmt.Print(gvp.Revision + " ")
+					fmt.Printf("       %s (%s)\n", gvp.Revision, gvp.RevisionTime)
 				}
 			}
-			fmt.Print("]\n")
+			fmt.Print("   ]\n")
 		} else {
 			notFound++
 			colorstring.Printf("[bold]%s[reset]\n - go modules: %s\n", mv.Path, mv.Version)
@@ -79,7 +79,8 @@ func main() {
 	}
 
 	total := len(f.Require) - matches
-	fmt.Printf("\n\nMatched package revisions: %d of %d.\n%d to check (%d not found and %d different revs).\n",
+	colorstring.Printf("\n\nMatched package revisions: [bold][green]%d[reset] of %d.\n"+
+		"[bold]%d[reset] to check ([bold][red]%d[reset] not found and [bold][yellow]%d[reset] different revs).\n",
 		matches, len(f.Require), total, notFound, diffRevs)
 }
 
