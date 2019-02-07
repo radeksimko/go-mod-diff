@@ -22,13 +22,4 @@ $ go-mod-diff /tmp/0.11-vendor.json
 ### `./go-src`
 
 All packages in this folder are just copies of some internal packages from https://github.com/golang/go which cannot be imported directly as a result of being `internal`.
-
-```sh
-OLD_IMPORT_PATH="cmd/go/internal"
-NEW_REL_PATH="go-src/cmd/go/_internal"
-
-NEW_IMPORT_PATH="github.com/radeksimko/go-mod-diff/${NEW_REL_PATH}"
-mkdir -p $NEW_REL_PATH
-cp -r $GOPATH/src/github.com/golang/go/src/${OLD_IMPORT_PATH}/{modfile,module,semver} ${NEW_REL_PATH}/
-find ./${NEW_REL_PATH} -name '*.go' | xargs -I{} sed -i -e "s:${OLD_IMPORT_PATH}:${NEW_IMPORT_PATH}:" {}
-```
+Use `go-update.sh` to update packages here.
