@@ -2,18 +2,22 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/google/go-github/v22/github"
 	"github.com/kardianos/govendor/vendorfile"
 	"github.com/mitchellh/colorstring"
 	"github.com/radeksimko/go-mod-diff/go-src/cmd/go/_internal/modfile"
+	"golang.org/x/oauth2"
 	"golang.org/x/tools/go/vcs"
 )
 
@@ -49,6 +53,14 @@ func main() {
 
 	oldPackages := vf.Package
 
+	ctx := context.Background()
+	var tc *http.Client
+	if os.Getenv("GITHUB_TOKEN") != "" {
+		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: os.Getenv("GITHUB_TOKEN")})
+		tc = oauth2.NewClient(ctx, ts)
+	}
+	client := github.NewClient(tc)
+
 	// Compare both and print out differences
 	matches := 0
 	notFound := 0
@@ -63,11 +75,31 @@ func main() {
 			matches++
 			continue
 		} else if len(govendorPkgs) > 0 {
+			gitHubSHA := ""
+			githubRevSuffix := ""
+			if goModRev == "" && strings.HasPrefix(mv.Path, "github.com/") {
+				parts := strings.Split(mv.Path, "/")
+				rc, _, err := client.Repositories.GetCommit(ctx, parts[1], parts[2], strings.TrimSuffix(mv.Version, "+incompatible"))
+				if err != nil {
+					// log.Printf("Error: %s", err)
+				} else {
+					gitHubSHA = *rc.SHA
+					githubRevSuffix = fmt.Sprintf(" (%s)", gitHubSHA)
+					if len(govendorPkgs) == 1 && govendorPkgs[0].Revision == gitHubSHA {
+						matches++
+						continue
+					}
+				}
+			}
+
 			diffRevs++
-			colorstring.Printf("\n[bold]%s[reset]\n - go modules: %s\n", mv.Path, mv.Version)
+			colorstring.Printf("\n[bold]%s[reset]\n - go modules: %s%s\n", mv.Path, mv.Version, githubRevSuffix)
+			if strings.HasPrefix(mv.Path, "github.com/") {
+				fmt.Printf(" - GitHub: %s\n", gitHubURL(mv.Path, mv.Version))
+			}
 			fmt.Print(" - govendor: [\n")
 			for _, gvp := range govendorPkgs {
-				if goModRev != "" && strings.HasPrefix(gvp.Revision, goModRev) {
+				if goModRev != "" && strings.HasPrefix(gvp.Revision, goModRev) || gitHubSHA != "" && gitHubSHA == gvp.Revision {
 					colorstring.Printf("       [green]%s (%s)\n", gvp.Revision, gvp.RevisionTime)
 				} else {
 					fmt.Printf("       %s (%s)\n", gvp.Revision, gvp.RevisionTime)
@@ -87,6 +119,10 @@ func main() {
 	colorstring.Printf("\n\nMatched package revisions: [bold][green]%d[reset] of %d.\n"+
 		"[bold]%d[reset] to check ([bold][red]%d[reset] not found and [bold][yellow]%d[reset] different revs).\n",
 		matches, len(f.Require), total, notFound, diffRevs)
+}
+
+func gitHubURL(repoPath, ref string) string {
+	return fmt.Sprintf("https://%s/tree/%s", repoPath, ref)
 }
 
 func printGoModWhy(path string, requires []*modfile.Require) {
