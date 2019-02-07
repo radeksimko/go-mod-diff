@@ -99,10 +99,15 @@ func main() {
 			}
 			fmt.Print(" - govendor: [\n")
 			for _, gvp := range govendorPkgs {
+				revTime := ""
+				if gvp.RevisionTime != "" {
+					revTime = fmt.Sprintf(" (%s)", gvp.RevisionTime)
+				}
+
 				if goModRev != "" && strings.HasPrefix(gvp.Revision, goModRev) || gitHubSHA != "" && gitHubSHA == gvp.Revision {
-					colorstring.Printf("       [green]%s (%s)\n", gvp.Revision, gvp.RevisionTime)
+					colorstring.Printf("       [green]%s%s\n", gvp.Revision, revTime)
 				} else {
-					fmt.Printf("       %s (%s)\n", gvp.Revision, gvp.RevisionTime)
+					fmt.Printf("       %s%s\n", gvp.Revision, revTime)
 				}
 			}
 			fmt.Print("   ]\n")
