@@ -64,7 +64,7 @@ func main() {
 			continue
 		} else if len(govendorPkgs) > 0 {
 			diffRevs++
-			colorstring.Printf("[bold]%s[reset]\n - go modules: %s\n", mv.Path, mv.Version)
+			colorstring.Printf("\n[bold]%s[reset]\n - go modules: %s\n", mv.Path, mv.Version)
 			fmt.Print(" - govendor: [\n")
 			for _, gvp := range govendorPkgs {
 				if goModRev != "" && strings.HasPrefix(gvp.Revision, goModRev) {
@@ -77,7 +77,7 @@ func main() {
 			printGoModWhy(mv.Path, f.Require)
 		} else {
 			notFound++
-			colorstring.Printf("[bold]%s[reset]\n - go modules: %s\n", mv.Path, mv.Version)
+			colorstring.Printf("\n[bold]%s[reset]\n - go modules: %s\n", mv.Path, mv.Version)
 			colorstring.Print(" - govendor: [red]Not found\n")
 			printGoModWhy(mv.Path, f.Require)
 		}
