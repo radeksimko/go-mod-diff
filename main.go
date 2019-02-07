@@ -11,7 +11,7 @@ import (
 
 	"github.com/kardianos/govendor/vendorfile"
 	"github.com/mitchellh/colorstring"
-	"github.com/radeksimko/go-mod-diff/go-internal/modfile"
+	"github.com/radeksimko/go-mod-diff/go-src/cmd/go/_internal/modfile"
 )
 
 func main() {
