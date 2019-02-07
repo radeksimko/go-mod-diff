@@ -1,17 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/kardianos/govendor/vendorfile"
 	"github.com/mitchellh/colorstring"
 	"github.com/radeksimko/go-mod-diff/go-src/cmd/go/_internal/modfile"
+	"golang.org/x/tools/go/vcs"
 )
 
 func main() {
@@ -71,10 +74,12 @@ func main() {
 				}
 			}
 			fmt.Print("   ]\n")
+			printGoModWhy(mv.Path, f.Require)
 		} else {
 			notFound++
 			colorstring.Printf("[bold]%s[reset]\n - go modules: %s\n", mv.Path, mv.Version)
 			colorstring.Print(" - govendor: [red]Not found\n")
+			printGoModWhy(mv.Path, f.Require)
 		}
 	}
 
@@ -84,12 +89,120 @@ func main() {
 		matches, len(f.Require), total, notFound, diffRevs)
 }
 
+func printGoModWhy(path string, requires []*modfile.Require) {
+	fmt.Printf(" - go mod why: ")
+	mts, stderr, err := goModWhy(path)
+	if err != nil {
+		colorstring.Printf("[bold][red]Failed to check (%s)[reset][red]\n%s", err, stderr)
+		return
+	}
+	if len(mts) > 0 {
+		fmt.Printf("[")
+	} else {
+		colorstring.Printf("[bold][red]Package not needed (try `go mod tidy`)\n")
+	}
+	for _, mt := range mts {
+		for _, t := range mt {
+			versionSuffix := ""
+			version := getVersionForModule(requires, t)
+			if version != "" {
+				versionSuffix = " @ " + version
+			}
+
+			fmt.Printf("\n     %s%s", t, versionSuffix)
+		}
+		fmt.Println("")
+	}
+	if len(mts) > 0 {
+		fmt.Printf("   ]\n")
+	}
+}
+
 func parseRevision(version string) string {
 	parts := strings.Split(version, "-")
 	if len(parts) == 3 {
 		return parts[2]
 	}
 	return ""
+}
+
+func goModWhy(importPath string) ([][]string, string, error) {
+	cmd := exec.Command("go", "mod", "why", "-m", importPath)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return nil, stderr.String(), err
+	}
+
+	capture := false
+	moduleTrees := make([][]string, 0)
+	tree := make([]string, 0)
+	i, j := 0, 0
+	lastCapturedRoot := ""
+	for {
+		line, err := stdout.ReadString('\n')
+
+		// beginning of tree
+		if strings.HasPrefix(line, "# ") {
+			capture = true
+			j = 0
+			continue
+		}
+
+		// end of tree
+		if err != nil || line == "\n" || strings.Contains(line, "module does not need") {
+			capture = false
+			lastCapturedRoot = ""
+			// Save tree, if there's anything to save
+			if len(tree) > 0 {
+				moduleTrees = append(moduleTrees, tree)
+				tree = make([]string, 0)
+				i++
+			}
+			if err != nil {
+				break
+			}
+			continue
+		}
+
+		line = strings.TrimSpace(line)
+
+		if capture {
+			if j == 0 {
+				tree = append(tree, line)
+			} else {
+				repoRoot, _ := repoRootForImportPath(line)
+				if repoRoot != lastCapturedRoot {
+					// log.Printf("[%d] %q", j, repoRoot)
+					tree = append(tree, repoRoot)
+					lastCapturedRoot = repoRoot
+				}
+			}
+			j++
+		}
+	}
+
+	return moduleTrees, "", nil
+}
+
+func getVersionForModule(modules []*modfile.Require, modPath string) string {
+	for _, m := range modules {
+		if m.Mod.Path == modPath {
+			return m.Mod.Version
+		}
+	}
+	return ""
+}
+
+func repoRootForImportPath(importPath string) (string, error) {
+	rr, err := vcs.RepoRootForImportPath(importPath, false)
+	if err != nil {
+		return "", err
+	}
+	return rr.Root, nil
 }
 
 func findGoVendorPkgs(packages []*vendorfile.Package, importPath string) []*vendorfile.Package {
