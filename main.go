@@ -173,6 +173,7 @@ func parseRevision(version string) string {
 func goModWhy(importPath string) ([][]string, string, error) {
 	cmd := exec.Command("go", "mod", "why", "-m", importPath)
 	var stdout, stderr bytes.Buffer
+	cmd.Env = append(os.Environ(), "GO111MODULE=on")
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
