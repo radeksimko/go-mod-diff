@@ -15,7 +15,7 @@ $ go-mod-diff /tmp/0.11-vendor.json
 
 ## Example output
 
-<img width="950" alt="screen shot 2019-02-05 at 23 27 46" src="https://user-images.githubusercontent.com/287584/52308480-b7193e80-299d-11e9-9403-de11c636075a.png">
+![screen shot 2019-02-12 at 21 44 51](https://user-images.githubusercontent.com/287584/52670013-7bd3be00-2f0f-11e9-91cd-30bc609b6006.png)
 
 ## Dependencies
 
