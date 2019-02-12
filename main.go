@@ -115,6 +115,9 @@ func main() {
 		} else {
 			notFound++
 			colorstring.Printf("\n[bold]%s[reset]\n - go modules: %s\n", mv.Path, mv.Version)
+			if strings.HasPrefix(mv.Path, "github.com/") {
+				fmt.Printf(" - GitHub: %s\n", gitHubURL(mv.Path, mv.Version))
+			}
 			colorstring.Print(" - govendor: [red]Not found\n")
 			printGoModWhy(mv.Path, f.Require)
 		}
