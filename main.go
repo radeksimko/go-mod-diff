@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,21 +21,12 @@ func main() {
 		gh = github.NewGitHubWithToken(os.Getenv("GITHUB_TOKEN"))
 	}
 
+	// Parse go modules file
 	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// Parse go modules file
-	gomodPath := filepath.Join(cwd, "go.mod")
-	data, err := ioutil.ReadFile(gomodPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	f, err := modfile.Parse(gomodPath, data, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
+	f, err := gomod.ParseFile(filepath.Join(cwd, "go.mod"))
 
 	// Parse govendor file
 	vf, err := govendor.ParseFile(os.Args[1])
@@ -132,7 +122,7 @@ func printGoModWhy(path string, requires []*modfile.Require) {
 	for _, mt := range mts {
 		for _, t := range mt {
 			versionSuffix := ""
-			version := getVersionForModule(requires, t)
+			version := gomod.GetVersionForModule(requires, t)
 			if version != "" {
 				versionSuffix = " @ " + version
 			}
@@ -144,13 +134,4 @@ func printGoModWhy(path string, requires []*modfile.Require) {
 	if len(mts) > 0 {
 		fmt.Printf("   ]\n")
 	}
-}
-
-func getVersionForModule(modules []*modfile.Require, modPath string) string {
-	for _, m := range modules {
-		if m.Mod.Path == modPath {
-			return m.Mod.Version
-		}
-	}
-	return ""
 }

@@ -3,10 +3,12 @@ package gomod
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/radeksimko/go-mod-diff/go-src/cmd/go/_internal/modfile"
 	"golang.org/x/tools/go/vcs"
 )
 
@@ -21,6 +23,23 @@ func (vr *VersionRef) String() string {
 
 func (vr *VersionRef) IsRevision() bool {
 	return vr.isRev
+}
+
+func ParseFile(path string) (*modfile.File, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return modfile.Parse(path, data, nil)
+}
+
+func GetVersionForModule(modules []*modfile.Require, modPath string) string {
+	for _, m := range modules {
+		if m.Mod.Path == modPath {
+			return m.Mod.Version
+		}
+	}
+	return ""
 }
 
 func ParseRefFromVersion(rawVersion string) (*VersionRef, error) {
