@@ -2,22 +2,20 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"github.com/google/go-github/v22/github"
 	"github.com/kardianos/govendor/vendorfile"
 	"github.com/mitchellh/colorstring"
+	"github.com/radeksimko/go-mod-diff/github"
 	"github.com/radeksimko/go-mod-diff/go-src/cmd/go/_internal/modfile"
-	"golang.org/x/oauth2"
+	"github.com/radeksimko/go-mod-diff/gomod"
 	"golang.org/x/tools/go/vcs"
 )
 
@@ -53,13 +51,10 @@ func main() {
 
 	oldPackages := vf.Package
 
-	ctx := context.Background()
-	var tc *http.Client
+	gh := github.NewGitHub()
 	if os.Getenv("GITHUB_TOKEN") != "" {
-		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: os.Getenv("GITHUB_TOKEN")})
-		tc = oauth2.NewClient(ctx, ts)
+		gh = github.NewGitHubWithToken(os.Getenv("GITHUB_TOKEN"))
 	}
-	client := github.NewClient(tc)
 
 	// Compare both and print out differences
 	matches := 0
@@ -69,21 +64,26 @@ func main() {
 		mv := r.Mod
 		govendorPkgs := findGoVendorPkgs(oldPackages, mv.Path)
 
-		goModRev := parseRevision(mv.Version)
+		ref, err := gomod.ParseRefFromVersion(mv.Version)
+		if err != nil {
+			log.Printf("Error: %s", err)
+		}
 
-		if len(govendorPkgs) == 1 && goModRev != "" && strings.HasPrefix(govendorPkgs[0].Revision, goModRev) {
+		repo, err := github.ParseRepositoryURL(mv.Path)
+		isGithubURL := (err == nil)
+
+		if len(govendorPkgs) == 1 && ref.IsRevision() && strings.HasPrefix(govendorPkgs[0].Revision, ref.String()) {
 			matches++
 			continue
 		} else if len(govendorPkgs) > 0 {
 			gitHubSHA := ""
 			githubRevSuffix := ""
-			if goModRev == "" && strings.HasPrefix(mv.Path, "github.com/") {
-				parts := strings.Split(mv.Path, "/")
-				rc, _, err := client.Repositories.GetCommit(ctx, parts[1], parts[2], strings.TrimSuffix(mv.Version, "+incompatible"))
+			if !ref.IsRevision() && isGithubURL {
+				sha, err := gh.GetCommitSHA(repo, ref.String())
 				if err != nil {
-					// log.Printf("Error: %s", err)
+					log.Printf("Error: %s", err)
 				} else {
-					gitHubSHA = *rc.SHA
+					gitHubSHA = sha
 					githubRevSuffix = fmt.Sprintf(" (%s)", gitHubSHA)
 					if len(govendorPkgs) == 1 && govendorPkgs[0].Revision == gitHubSHA {
 						matches++
@@ -94,8 +94,8 @@ func main() {
 
 			diffRevs++
 			colorstring.Printf("\n[bold]%s[reset]\n - go modules: %s%s\n", mv.Path, mv.Version, githubRevSuffix)
-			if strings.HasPrefix(mv.Path, "github.com/") {
-				fmt.Printf(" - GitHub: %s\n", gitHubURL(mv.Path, mv.Version))
+			if isGithubURL {
+				fmt.Printf(" - GitHub: %s\n", github.TreeURL(repo, ref.String()))
 			}
 			fmt.Print(" - govendor: [\n")
 			for _, gvp := range govendorPkgs {
@@ -104,7 +104,7 @@ func main() {
 					revTime = fmt.Sprintf(" (%s)", gvp.RevisionTime)
 				}
 
-				if goModRev != "" && strings.HasPrefix(gvp.Revision, goModRev) || gitHubSHA != "" && gitHubSHA == gvp.Revision {
+				if ref.IsRevision() && strings.HasPrefix(gvp.Revision, ref.String()) || gitHubSHA != "" && gitHubSHA == gvp.Revision {
 					colorstring.Printf("       [green]%s%s\n", gvp.Revision, revTime)
 				} else {
 					fmt.Printf("       %s%s\n", gvp.Revision, revTime)
@@ -115,8 +115,8 @@ func main() {
 		} else {
 			notFound++
 			colorstring.Printf("\n[bold]%s[reset]\n - go modules: %s\n", mv.Path, mv.Version)
-			if strings.HasPrefix(mv.Path, "github.com/") {
-				fmt.Printf(" - GitHub: %s\n", gitHubURL(mv.Path, mv.Version))
+			if isGithubURL {
+				fmt.Printf(" - GitHub: %s\n", github.TreeURL(repo, ref.String()))
 			}
 			colorstring.Print(" - govendor: [red]Not found\n")
 			printGoModWhy(mv.Path, f.Require)
@@ -127,10 +127,6 @@ func main() {
 	colorstring.Printf("\n\nMatched package revisions: [bold][green]%d[reset] of %d.\n"+
 		"[bold]%d[reset] to check ([bold][red]%d[reset] not found and [bold][yellow]%d[reset] different revs).\n",
 		matches, len(f.Require), total, notFound, diffRevs)
-}
-
-func gitHubURL(repoPath, ref string) string {
-	return fmt.Sprintf("https://%s/tree/%s", repoPath, ref)
 }
 
 func printGoModWhy(path string, requires []*modfile.Require) {
@@ -160,14 +156,6 @@ func printGoModWhy(path string, requires []*modfile.Require) {
 	if len(mts) > 0 {
 		fmt.Printf("   ]\n")
 	}
-}
-
-func parseRevision(version string) string {
-	parts := strings.Split(version, "-")
-	if len(parts) == 3 {
-		return parts[2]
-	}
-	return ""
 }
 
 func goModWhy(importPath string) ([][]string, string, error) {
