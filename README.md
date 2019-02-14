@@ -21,7 +21,7 @@ For these (and more) reasons this tool aims to help with comparison of dependenc
 
 ## Supports
 
-[Govendor](https://github.com/kardianos/govendor) as a legacy format.
+ - [Govendor](https://github.com/kardianos/govendor) as input format.
 
 ## Usage
 
