@@ -116,12 +116,22 @@ func printGoModWhy(path string, vlF gomod.VersionLookupFunc) {
 	for _, mt := range mts {
 		for _, t := range mt {
 			versionSuffix := ""
+			githubURL := ""
+
 			version := vlF(t)
 			if version != "" {
 				versionSuffix = " @ " + version
+
+				repo, err := github.ParseRepositoryURL(t)
+				if err == nil {
+					ref, err := gomod.ParseRefFromVersion(version)
+					if err == nil {
+						githubURL = fmt.Sprintf(" (%s)", github.TreeURL(repo, ref.String()))
+					}
+				}
 			}
 
-			fmt.Printf("\n     %s%s", t, versionSuffix)
+			fmt.Printf("\n     %s%s%s", t, versionSuffix, githubURL)
 		}
 		fmt.Println("")
 	}
