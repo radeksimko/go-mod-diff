@@ -1,4 +1,4 @@
-# go-mod-diff
+# go-mod-diff [![CircleCI](https://circleci.com/gh/radeksimko/go-mod-diff.svg?style=svg)](https://circleci.com/gh/radeksimko/go-mod-diff)
 
 To make comparison of Go dependencies easier.
 
