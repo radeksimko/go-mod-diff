@@ -5,11 +5,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/mitchellh/colorstring"
+	"github.com/radeksimko/go-mod-diff/diff"
 	"github.com/radeksimko/go-mod-diff/github"
-	"github.com/radeksimko/go-mod-diff/go-src/cmd/go/_internal/modfile"
 	"github.com/radeksimko/go-mod-diff/gomod"
 	"github.com/radeksimko/go-mod-diff/govendor"
 )
@@ -26,88 +25,83 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	f, err := gomod.ParseFile(filepath.Join(cwd, "go.mod"))
+	goModFile, err := gomod.ParseFile(filepath.Join(cwd, "go.mod"))
 
 	// Parse govendor file
-	vf, err := govendor.ParseFile(os.Args[1])
+	govendorFile, err := govendor.ParseFile(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Compare both and print out differences
-	matches := 0
-	notFound := 0
-	diffRevs := 0
-	for _, r := range f.Require {
-		mv := r.Mod
-		govendorPkgs := govendor.FindPackages(vf.Package, mv.Path)
+	d, err := diff.CompareGoModWithGovendor(goModFile, govendorFile, gh)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-		ref, err := gomod.ParseRefFromVersion(mv.Version)
-		if err != nil {
-			log.Printf("Error: %s", err)
-		}
+	printDifference(d, gomod.GetVersionForModule(goModFile))
 
-		repo, err := github.ParseRepositoryURL(mv.Path)
-		isGithubURL := (err == nil)
+	total := len(goModFile.Require) - len(d.Matched)
 
-		if len(govendorPkgs) == 1 && ref.IsRevision() && strings.HasPrefix(govendorPkgs[0].Revision, ref.String()) {
-			matches++
-			continue
-		} else if len(govendorPkgs) > 0 {
-			gitHubSHA := ""
-			githubRevSuffix := ""
-			if !ref.IsRevision() && isGithubURL {
-				sha, err := gh.GetCommitSHA(repo, ref.String())
-				if err != nil {
-					log.Printf("Error: %s", err)
-				} else {
-					gitHubSHA = sha
-					githubRevSuffix = fmt.Sprintf(" (%s)", gitHubSHA)
-					if len(govendorPkgs) == 1 && govendorPkgs[0].Revision == gitHubSHA {
-						matches++
-						continue
-					}
-				}
-			}
+	colorstring.Printf("\n\nMatched package revisions: [bold][green]%d[reset] of %d.\n"+
+		"[bold]%d[reset] to check ([bold][red]%d[reset] not found and [bold][yellow]%d[reset] different revs).\n",
+		len(d.Matched), len(goModFile.Require), total, len(d.NotFound), len(d.Different))
+}
 
-			diffRevs++
-			colorstring.Printf("\n[bold]%s[reset]\n - go modules: %s%s\n", mv.Path, mv.Version, githubRevSuffix)
-			if isGithubURL {
-				fmt.Printf(" - GitHub: %s\n", github.TreeURL(repo, ref.String()))
-			}
-			fmt.Print(" - govendor: [\n")
-			for _, gvp := range govendorPkgs {
-				revTime := ""
-				if gvp.RevisionTime != "" {
-					revTime = fmt.Sprintf(" (%s)", gvp.RevisionTime)
-				}
+func printDifference(d *diff.Diff, vlF gomod.VersionLookupFunc) {
+	for _, entry := range d.Errored {
+		printDiffEntry(entry, vlF)
+	}
 
-				if ref.IsRevision() && strings.HasPrefix(gvp.Revision, ref.String()) || gitHubSHA != "" && gitHubSHA == gvp.Revision {
-					colorstring.Printf("       [green]%s%s\n", gvp.Revision, revTime)
-				} else {
-					fmt.Printf("       %s%s\n", gvp.Revision, revTime)
-				}
-			}
-			fmt.Print("   ]\n")
-			printGoModWhy(mv.Path, f.Require)
-		} else {
-			notFound++
-			colorstring.Printf("\n[bold]%s[reset]\n - go modules: %s\n", mv.Path, mv.Version)
-			if isGithubURL {
-				fmt.Printf(" - GitHub: %s\n", github.TreeURL(repo, ref.String()))
-			}
-			colorstring.Print(" - govendor: [red]Not found\n")
-			printGoModWhy(mv.Path, f.Require)
+	for _, entry := range d.NotFound {
+		printDiffEntry(entry, vlF)
+	}
+
+	for _, entry := range d.Different {
+		printDiffEntry(entry, vlF)
+	}
+}
+
+func printDiffEntry(de *diff.DiffEntry, vlF gomod.VersionLookupFunc) {
+	colorstring.Printf("\n[bold]%s[reset]\n", de.ModulePath)
+
+	colorstring.Printf(" - go modules: %s\n", de.GoModVersion.String())
+
+	if de.Error != nil {
+		colorstring.Printf(" - [bold][red]Error:[reset] [red]%s[reset]\n", de.Error.Error())
+	}
+
+	repo, err := github.ParseRepositoryURL(de.ModulePath)
+	if err == nil {
+		ref, err := gomod.ParseRefFromVersion(de.GoModVersion.Version)
+		if err == nil {
+			fmt.Printf(" - GitHub: %s\n", github.TreeURL(repo, ref.String()))
 		}
 	}
 
-	total := len(f.Require) - matches
-	colorstring.Printf("\n\nMatched package revisions: [bold][green]%d[reset] of %d.\n"+
-		"[bold]%d[reset] to check ([bold][red]%d[reset] not found and [bold][yellow]%d[reset] different revs).\n",
-		matches, len(f.Require), total, notFound, diffRevs)
+	if de.GithubVersion != nil {
+		colorstring.Printf(" - GitHub rev: %s\n", de.GithubVersion.String())
+	}
+
+	fmt.Print(" - govendor: ")
+	if len(de.GoVendorVersions) > 0 {
+		fmt.Printf("[\n")
+		for _, gvv := range de.GoVendorVersions {
+			if gvv.IsEqual(de.GoModVersion) || gvv.IsEqual(de.GithubVersion) {
+				colorstring.Printf("       [green]%s\n", gvv.String())
+			} else {
+				fmt.Printf("       %s\n", gvv.String())
+			}
+		}
+		fmt.Print("   ]\n")
+	} else {
+		colorstring.Print("[red]not found\n")
+	}
+
+	printGoModWhy(de.ModulePath, vlF)
 }
 
-func printGoModWhy(path string, requires []*modfile.Require) {
+func printGoModWhy(path string, vlF gomod.VersionLookupFunc) {
 	fmt.Printf(" - go mod why: ")
 	mts, stderr, err := gomod.GoModWhy(path)
 	if err != nil {
@@ -122,7 +116,7 @@ func printGoModWhy(path string, requires []*modfile.Require) {
 	for _, mt := range mts {
 		for _, t := range mt {
 			versionSuffix := ""
-			version := gomod.GetVersionForModule(requires, t)
+			version := vlF(t)
 			if version != "" {
 				versionSuffix = " @ " + version
 			}

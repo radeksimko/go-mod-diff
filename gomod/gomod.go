@@ -25,6 +25,8 @@ func (vr *VersionRef) IsRevision() bool {
 	return vr.isRev
 }
 
+type VersionLookupFunc func(path string) string
+
 func ParseFile(path string) (*modfile.File, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -33,13 +35,15 @@ func ParseFile(path string) (*modfile.File, error) {
 	return modfile.Parse(path, data, nil)
 }
 
-func GetVersionForModule(modules []*modfile.Require, modPath string) string {
-	for _, m := range modules {
-		if m.Mod.Path == modPath {
-			return m.Mod.Version
+func GetVersionForModule(modFile *modfile.File) VersionLookupFunc {
+	return func(path string) string {
+		for _, m := range modFile.Require {
+			if m.Mod.Path == path {
+				return m.Mod.Version
+			}
 		}
+		return ""
 	}
-	return ""
 }
 
 func ParseRefFromVersion(rawVersion string) (*VersionRef, error) {
