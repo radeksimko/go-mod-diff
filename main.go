@@ -2,21 +2,26 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/kardianos/govendor/vendorfile"
 	"github.com/mitchellh/colorstring"
 	"github.com/radeksimko/go-mod-diff/github"
 	"github.com/radeksimko/go-mod-diff/go-src/cmd/go/_internal/modfile"
 	"github.com/radeksimko/go-mod-diff/gomod"
+	"github.com/radeksimko/go-mod-diff/govendor"
 )
 
 func main() {
+	// Setup GitHub connection
+	gh := github.NewGitHub()
+	if os.Getenv("GITHUB_TOKEN") != "" {
+		gh = github.NewGitHubWithToken(os.Getenv("GITHUB_TOKEN"))
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
@@ -34,23 +39,9 @@ func main() {
 	}
 
 	// Parse govendor file
-	vendorJsonPath := os.Args[1]
-	src, err := os.Open(vendorJsonPath)
+	vf, err := govendor.ParseFile(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
-	}
-	defer src.Close()
-	vf := &vendorfile.File{}
-	err = vf.Unmarshal(io.Reader(src))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	oldPackages := vf.Package
-
-	gh := github.NewGitHub()
-	if os.Getenv("GITHUB_TOKEN") != "" {
-		gh = github.NewGitHubWithToken(os.Getenv("GITHUB_TOKEN"))
 	}
 
 	// Compare both and print out differences
@@ -59,7 +50,7 @@ func main() {
 	diffRevs := 0
 	for _, r := range f.Require {
 		mv := r.Mod
-		govendorPkgs := findGoVendorPkgs(oldPackages, mv.Path)
+		govendorPkgs := govendor.FindPackages(vf.Package, mv.Path)
 
 		ref, err := gomod.ParseRefFromVersion(mv.Version)
 		if err != nil {
@@ -162,26 +153,4 @@ func getVersionForModule(modules []*modfile.Require, modPath string) string {
 		}
 	}
 	return ""
-}
-
-func findGoVendorPkgs(packages []*vendorfile.Package, importPath string) []*vendorfile.Package {
-	var pkgs []*vendorfile.Package
-	for _, p := range packages {
-		if strings.HasPrefix(p.Path, importPath) {
-			p.Path = importPath
-			if !govendorPkgExists(pkgs, p) {
-				pkgs = append(pkgs, p)
-			}
-		}
-	}
-	return pkgs
-}
-
-func govendorPkgExists(packages []*vendorfile.Package, pkg *vendorfile.Package) bool {
-	for _, p := range packages {
-		if p.Revision == pkg.Revision {
-			return true
-		}
-	}
-	return false
 }
