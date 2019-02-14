@@ -1,6 +1,23 @@
 # go-mod-diff
 
-To make comparison of dependencies easier.
+To make comparison of Go dependencies easier.
+
+## Why?
+
+`go mod init` is capable of migrating dependencies and its versions from
+other dependency managers (such as govendor).
+It does so on best effort basis.
+
+Pinning to the exact same version is not always possible after migration:
+
+ - some package managers version on package level, not modules, which results in multiple versions of a module
+    - Go modules enforce 1 version per module (usually repository)
+ - some package managers have different ways of pinning to tags or revisions
+    - Go modules prefer semver-based pinning
+ - some package managers don't track transitive dependencies
+    - Go modules track all transitive dependencies
+
+For these (and more) reasons this tool aims to help with comparison of dependency versions before and after the migration.
 
 ## Supports
 
