@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -16,7 +14,6 @@ import (
 	"github.com/radeksimko/go-mod-diff/github"
 	"github.com/radeksimko/go-mod-diff/go-src/cmd/go/_internal/modfile"
 	"github.com/radeksimko/go-mod-diff/gomod"
-	"golang.org/x/tools/go/vcs"
 )
 
 func main() {
@@ -131,7 +128,7 @@ func main() {
 
 func printGoModWhy(path string, requires []*modfile.Require) {
 	fmt.Printf(" - go mod why: ")
-	mts, stderr, err := goModWhy(path)
+	mts, stderr, err := gomod.GoModWhy(path)
 	if err != nil {
 		colorstring.Printf("[bold][red]Failed to check (%s)[reset][red]\n%s", err, stderr)
 		return
@@ -158,69 +155,6 @@ func printGoModWhy(path string, requires []*modfile.Require) {
 	}
 }
 
-func goModWhy(importPath string) ([][]string, string, error) {
-	cmd := exec.Command("go", "mod", "why", "-m", importPath)
-	var stdout, stderr bytes.Buffer
-	cmd.Env = append(os.Environ(), "GO111MODULE=on")
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	if err != nil {
-		return nil, stderr.String(), err
-	}
-
-	capture := false
-	moduleTrees := make([][]string, 0)
-	tree := make([]string, 0)
-	i, j := 0, 0
-	lastCapturedRoot := ""
-	for {
-		line, err := stdout.ReadString('\n')
-
-		// beginning of tree
-		if strings.HasPrefix(line, "# ") {
-			capture = true
-			j = 0
-			continue
-		}
-
-		// end of tree
-		if err != nil || line == "\n" || strings.Contains(line, "module does not need") {
-			capture = false
-			lastCapturedRoot = ""
-			// Save tree, if there's anything to save
-			if len(tree) > 0 {
-				moduleTrees = append(moduleTrees, tree)
-				tree = make([]string, 0)
-				i++
-			}
-			if err != nil {
-				break
-			}
-			continue
-		}
-
-		line = strings.TrimSpace(line)
-
-		if capture {
-			if j == 0 {
-				tree = append(tree, line)
-			} else {
-				repoRoot, _ := repoRootForImportPath(line)
-				if repoRoot != lastCapturedRoot {
-					// log.Printf("[%d] %q", j, repoRoot)
-					tree = append(tree, repoRoot)
-					lastCapturedRoot = repoRoot
-				}
-			}
-			j++
-		}
-	}
-
-	return moduleTrees, "", nil
-}
-
 func getVersionForModule(modules []*modfile.Require, modPath string) string {
 	for _, m := range modules {
 		if m.Mod.Path == modPath {
@@ -228,14 +162,6 @@ func getVersionForModule(modules []*modfile.Require, modPath string) string {
 		}
 	}
 	return ""
-}
-
-func repoRootForImportPath(importPath string) (string, error) {
-	rr, err := vcs.RepoRootForImportPath(importPath, false)
-	if err != nil {
-		return "", err
-	}
-	return rr.Root, nil
 }
 
 func findGoVendorPkgs(packages []*vendorfile.Package, importPath string) []*vendorfile.Package {
