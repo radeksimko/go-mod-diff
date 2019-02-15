@@ -60,6 +60,10 @@ func printDifference(d *diff.Diff, vlF gomod.VersionLookupFunc) {
 	for _, entry := range d.Different {
 		printDiffEntry(entry, vlF)
 	}
+
+	for _, entry := range d.Matched {
+		colorstring.Printf("\n[bold]%s[reset] [bold][green]✓[reset]", entry.ModulePath)
+	}
 }
 
 func printDiffEntry(de *diff.DiffEntry, vlF gomod.VersionLookupFunc) {
