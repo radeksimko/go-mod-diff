@@ -23,6 +23,10 @@ func TestParseRefFromVersion(t *testing.T) {
 			expectedRef: &VersionRef{ref: "7e4b007599d4", isRev: true},
 		},
 		{
+			rawVersion:  "v0.11.12-beta1.0.20190227065421-fc531f54a878",
+			expectedRef: &VersionRef{ref: "fc531f54a878", isRev: true},
+		},
+		{
 			rawVersion:  "v4.2.1+incompatible",
 			expectedRef: &VersionRef{ref: "v4.2.1", isRev: false},
 		},

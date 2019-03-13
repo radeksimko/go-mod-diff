@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/radeksimko/go-mod-diff/go-src/cmd/go/_internal/modfile"
@@ -57,6 +58,12 @@ func ParseRefFromVersion(rawVersion string) (*VersionRef, error) {
 			return nil, fmt.Errorf("Unexpected version format (%q)", rawVersion)
 		}
 		return &VersionRef{parts[2], true}, nil
+	}
+
+	combinedVersionRe := regexp.MustCompile(`.+\.0\.[0-9]{14}-([a-f0-9]+)$`)
+	matches := combinedVersionRe.FindStringSubmatch(rawVersion)
+	if len(matches) == 2 {
+		return &VersionRef{matches[1], true}, nil
 	}
 
 	rawVersion = strings.TrimSuffix(rawVersion, "+incompatible")
