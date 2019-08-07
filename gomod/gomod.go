@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/radeksimko/go-mod-diff/go-src/cmd/go/_internal/modfile"
+	"github.com/radeksimko/mod/modfile"
 	"golang.org/x/tools/go/vcs"
 )
 

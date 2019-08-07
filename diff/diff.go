@@ -6,9 +6,9 @@ import (
 
 	"github.com/kardianos/govendor/vendorfile"
 	"github.com/radeksimko/go-mod-diff/github"
-	"github.com/radeksimko/go-mod-diff/go-src/cmd/go/_internal/modfile"
 	"github.com/radeksimko/go-mod-diff/gomod"
 	"github.com/radeksimko/go-mod-diff/govendor"
+	"github.com/radeksimko/mod/modfile"
 )
 
 type Diff struct {
