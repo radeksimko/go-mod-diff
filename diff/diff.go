@@ -8,7 +8,7 @@ import (
 	"github.com/radeksimko/go-mod-diff/github"
 	"github.com/radeksimko/go-mod-diff/gomod"
 	"github.com/radeksimko/go-mod-diff/govendor"
-	"github.com/radeksimko/mod/modfile"
+	"golang.org/x/mod/modfile"
 )
 
 type Diff struct {
